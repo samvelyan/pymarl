@@ -10,6 +10,8 @@ import sys
 import torch as th
 from utils.logging import get_logger
 import yaml
+import wandb
+import hydra
 
 from run import run
 
@@ -23,6 +25,7 @@ ex.captured_out_filter = apply_backspaces_and_linefeeds
 results_path = os.path.join(dirname(dirname(abspath(__file__))), "results")
 
 
+@hydra.main(config_name="config")
 @ex.main
 def my_main(_run, _config, _log):
     # Setting the random seed throughout the modules
@@ -30,6 +33,9 @@ def my_main(_run, _config, _log):
     np.random.seed(config["seed"])
     th.manual_seed(config["seed"])
     config['env_args']['seed'] = config["seed"]
+
+    wandb.login()
+    wandb.init(entity="league", project="pymarl", group="qmix_{})".format(config['env_args']['map_name']), config=_config)
 
     # run the framework
     run(_run, config, _log)

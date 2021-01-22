@@ -1,0 +1,29 @@
+# Logging arguments
+use_wandb: False                                 # Whether to log to wandb
+wandb_entity: "league"                        # Wandb team name
+wandb_project: "pymarl"                         # Wandb project name
+wandb_group: "zero_shot_qmix"                             # Wandb group name
+name: 0
+
+# Hydra settings
+defaults:
+- hydra/job_logging: colorlog
+- hydra/hydra_logging: colorlog
+- hydra/launcher: submitit_slurm
+
+# pip install hydra-core hydra_colorlog
+# can set these on the commandline too e.g. `hydra.launcher.partition=dev`
+hydra:
+    sweep: 
+      dir: ~/pymarl_runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    launcher:
+      name: pymarl
+      timeout_min: 4300
+      cpus_per_task: 10
+      gpus_per_node: 1
+      tasks_per_node: 1
+      mem_gb: 20
+      nodes: 1
+      partition: dev
+      comment: null
+      max_num_timeout: 5  # will requeue on timeout or preemption
