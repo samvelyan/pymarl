@@ -1,4 +1,4 @@
-env: sc2
+# @package _global_
 
 env_args:
   continuing_episode: False
@@ -40,4 +40,28 @@ learner_log_interval: 1000
 t_max: 2050000
 
 save_model: True
-save_model_intereval: 200000
+save_model_intereval: 200000 
+
+
+action_selector: "epsilon_greedy"
+epsilon_start: 1.0
+epsilon_finish: 0.05
+epsilon_anneal_time: 50000
+
+runner: "episode"
+
+buffer_size: 5000
+
+# update the target network every {} episodes
+target_update_interval: 200
+
+# use the Q_Learner to train
+agent_output_type: "q"
+learner: "q_learner"
+double_q: True
+mixer: "qmix"
+mixing_embed_dim: 32
+hypernet_layers: 2
+hypernet_embed: 64
+
+name: "qmix"

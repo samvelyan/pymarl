@@ -1,6 +1,7 @@
 # --- Defaults ---
 
 # --- pymarl options ---
+config: "qmix"
 runner: "episode" # Runs 1 env for an episode
 mac: "basic_mac" # Basic controller
 env: "sc2" # Environment name
@@ -45,3 +46,37 @@ obs_last_action: True # Include the agent's last action (one_hot) in the observa
 # --- Experiment running params ---
 repeat_id: 1
 label: "default_label"
+
+# Logging arguments
+use_wandb: False                                 # Whether to log to wandb
+wandb_entity: "league"                        # Wandb team name
+wandb_project: "pymarl"                         # Wandb project name
+wandb_group: "zero_shot_qmix"                             # Wandb group name
+name: 0
+seed: null
+unique_token: null
+device: "cuda"
+
+# Hydra settings
+defaults:
+- hydra/job_logging: colorlog
+- hydra/hydra_logging: colorlog
+- hydra/launcher: submitit_slurm
+- env: sc2
+
+# pip install hydra-core hydra_colorlog
+# can set these on the commandline too e.g. `hydra.launcher.partition=dev`
+hydra:
+    sweep: 
+      dir: ~/pymarl_runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    launcher:
+      name: pymarl
+      timeout_min: 4300
+      cpus_per_task: 10
+      gpus_per_node: 1
+      tasks_per_node: 1
+      mem_gb: 20
+      nodes: 1
+      partition: dev
+      comment: null
+      max_num_timeout: 5  # will requeue on timeout or preemption
