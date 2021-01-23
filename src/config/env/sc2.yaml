@@ -40,7 +40,7 @@ learner_log_interval: 1000
 t_max: 2050000
 
 save_model: True
-save_model_intereval: 200000 
+save_model_interval: 200000 
 
 
 action_selector: "epsilon_greedy"

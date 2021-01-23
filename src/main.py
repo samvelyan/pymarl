@@ -31,7 +31,7 @@ def main(args):
 
     config = OmegaConf.to_container(args)
     wandb.login()
-    wandb.init(entity="league", project="pymarl", group="qmix_{})".format(config['env_args']['map_name']), config=config)
+    wandb.init(entity=args.wandb_entity, project=args.wandb_project, group=args.wandb_group, config=config)
 
     # run the framework
     logger = get_logger()
