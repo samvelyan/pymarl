@@ -1,5 +1,5 @@
 tb_logs/
 results/
-output/
+outputs/
 wandb/
 __pycache__/
