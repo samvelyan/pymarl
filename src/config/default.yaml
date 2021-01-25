@@ -67,8 +67,6 @@ defaults:
 # pip install hydra-core hydra_colorlog
 # can set these on the commandline too e.g. `hydra.launcher.partition=dev`
 hydra:
-    sweep: 
-      dir: ~/pymarl_runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
     launcher:
       name: pymarl
       timeout_min: 4300
