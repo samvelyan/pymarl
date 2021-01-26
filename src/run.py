@@ -32,7 +32,7 @@ def run(_config, _log):
                                        width=1)
     _log.info("\n\n" + experiment_params + "\n")
 
-    args.unique_token = "{}__{}".format(args.name, datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+    args.unique_token = "{}_{}".format(args.env_args["map_name"], args.seed)
 
     # Run and train
     run_sequential(args=args, logger=logger)
