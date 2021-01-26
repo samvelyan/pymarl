@@ -30,8 +30,9 @@ def main(args):
     args.env_args['seed'] = args.seed
 
     config = OmegaConf.to_container(args)
-    wandb.login()
-    wandb.init(entity=args.wandb_entity, project=args.wandb_project, group=args.wandb_group, config=config)
+    if args.use_wandb:
+        wandb.login()
+        wandb.init(entity=args.wandb_entity, project=args.wandb_project, group=args.wandb_group, config=config)
 
     # run the framework
     logger = get_logger()
