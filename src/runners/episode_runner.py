@@ -27,10 +27,12 @@ class EpisodeRunner:
         # Log the first run
         self.log_train_stats_t = -1000000
 
-    def setup(self, scheme, groups, preprocess, mac):
+    def setup(self, scheme, groups, preprocess, macs):
         self.new_batch = partial(EpisodeBatch, scheme, groups, self.batch_size, self.episode_limit + 1,
                                  preprocess=preprocess, device=self.args.device)
-        self.mac = mac
+        print(self.args.device)
+
+        self.macs = macs
 
     def get_env_info(self):
         return self.env.get_env_info()
@@ -51,7 +53,8 @@ class EpisodeRunner:
 
         terminated = False
         episode_return = 0
-        self.mac.init_hidden(batch_size=self.batch_size)
+        for mac in self.macs:
+            mac.init_hidden(batch_size=self.batch_size)
 
         while not terminated:
 
@@ -65,10 +68,12 @@ class EpisodeRunner:
 
             # Pass the entire batch of experiences up till now to the agents
             # Receive the actions for each agent at this timestep in a batch of size 1
-            actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+            actions  = []
+            for a, mac in enumerate(self.macs):
+                act = mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+                actions.append(act[0][a])
 
-            reward, terminated, env_info = self.env.step(actions[0])
-            episode_return += reward
+            reward, terminated, env_info = self.env.step(actions)
 
             post_transition_data = {
                 "actions": actions,
@@ -88,7 +93,10 @@ class EpisodeRunner:
         self.batch.update(last_data, ts=self.t)
 
         # Select actions in the last stored state
-        actions = self.mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+        actions  = []
+        for a, mac in enumerate(self.macs):
+            act = mac.select_actions(self.batch, t_ep=self.t, t_env=self.t_env, test_mode=test_mode)
+            actions.append(act[0][a])
         self.batch.update({"actions": actions}, ts=self.t)
 
         cur_stats = self.test_stats if test_mode else self.train_stats
@@ -107,18 +115,19 @@ class EpisodeRunner:
             self._log(cur_returns, cur_stats, log_prefix)
         elif self.t_env - self.log_train_stats_t >= self.args.runner_log_interval:
             self._log(cur_returns, cur_stats, log_prefix)
-            if hasattr(self.mac.action_selector, "epsilon"):
-                self.logger.log_stat("epsilon", self.mac.action_selector.epsilon, self.t_env)
+            if hasattr(self.macs[0].action_selector, "epsilon"):
+                self.logger.log_stat("epsilon", self.macs[0].action_selector.epsilon, self.t_env)
             self.log_train_stats_t = self.t_env
 
         return self.batch
 
     def _log(self, returns, stats, prefix):
-        wandb_stats = {
-                "steps" : self.t_env,
-                prefix + "return_mean" : np.mean(returns),
-                prefix + "return_std" : np.std(returns),
-                }
+        if self.args.use_wandb:
+            wandb_stats = {
+                    "steps" : self.t_env,
+                    prefix + "return_mean" : np.mean(returns),
+                    prefix + "return_std" : np.std(returns),
+                    }
         self.logger.log_stat(prefix + "return_mean", np.mean(returns), self.t_env)
         self.logger.log_stat(prefix + "return_std", np.std(returns), self.t_env)
         returns.clear()
@@ -126,6 +135,8 @@ class EpisodeRunner:
         for k, v in stats.items():
             if k != "n_episodes":
                 self.logger.log_stat(prefix + k + "_mean" , v/stats["n_episodes"], self.t_env)
-                wandb_stats[prefix + k + "_mean"] = v/stats["n_episodes"]
+                if self.args.use_wandb:
+                    wandb_stats[prefix + k + "_mean"] = v/stats["n_episodes"]
         stats.clear()
-        wandb.log(wandb_stats)
+        if self.args.use_wandb:
+            wandb.log(wandb_stats)

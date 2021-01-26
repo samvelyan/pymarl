@@ -55,8 +55,11 @@ def run(_config, _log):
 
 def evaluate_sequential(args, runner):
 
-    for _ in range(args.test_nepisode):
+    for i in range(args.test_nepisode):
         runner.run(test_mode=True)
+
+    stats = runner.env.get_stats()
+    print("Win rate = {}".format(stats["win_rate"]))
 
     if args.save_replay:
         runner.save_replay()
@@ -94,114 +97,46 @@ def run_sequential(args, logger):
                           preprocess=preprocess,
                           device="cpu" if args.buffer_cpu_only else args.device)
 
-    # Setup multiagent controller here
-    mac = mac_REGISTRY[args.mac](buffer.scheme, groups, args)
+    macs = [mac_REGISTRY[args.mac](buffer.scheme, groups, args) for a in range(args.n_agents)]
 
     # Give runner the scheme
-    runner.setup(scheme=scheme, groups=groups, preprocess=preprocess, mac=mac)
-
-    # Learner
-    learner = le_REGISTRY[args.learner](mac, buffer.scheme, logger, args)
-
-    if args.use_cuda:
-        learner.cuda()
+    runner.setup(scheme=scheme, groups=groups, preprocess=preprocess, macs=macs)
 
     if args.checkpoint_path != "":
+        paths = args.checkpoint_path.split(' ')
 
-        timesteps = []
-        timestep_to_load = 0
+        for agent, path in enumerate(paths):
+            timesteps = []
+            timestep_to_load = 0
+            if not os.path.isdir(path):
+                logger.console_logger.info("Checkpoint directiory {} doesn't exist".format(path))
+                return
 
-        if not os.path.isdir(args.checkpoint_path):
-            logger.console_logger.info("Checkpoint directiory {} doesn't exist".format(args.checkpoint_path))
-            return
 
-        # Go through all files in args.checkpoint_path
-        for name in os.listdir(args.checkpoint_path):
-            full_name = os.path.join(args.checkpoint_path, name)
-            # Check if they are dirs the names of which are numbers
-            if os.path.isdir(full_name) and name.isdigit():
-                timesteps.append(int(name))
+            # Go through all files in args.checkpoint_path
+            for name in os.listdir(path):
+                full_name = os.path.join(path, name)
+                # Check if they are dirs the names of which are numbers
+                if os.path.isdir(full_name) and name.isdigit():
+                    timesteps.append(int(name))
 
-        if args.load_step == 0:
-            # choose the max timestep
-            timestep_to_load = max(timesteps)
-        else:
-            # choose the timestep closest to load_step
-            timestep_to_load = min(timesteps, key=lambda x: abs(x - args.load_step))
+            if args.load_step == 0:
+                # choose the max timestep
+                timestep_to_load = max(timesteps)
+            else:
+                # choose the timestep closest to load_step
+                timestep_to_load = min(timesteps, key=lambda x: abs(x - args.load_step))
 
-        model_path = os.path.join(args.checkpoint_path, str(timestep_to_load))
+            model_path = os.path.join(path, str(timestep_to_load))
 
-        logger.console_logger.info("Loading model from {}".format(model_path))
-        learner.load_models(model_path)
+            logger.console_logger.info("Loading model from {}".format(model_path))
+            macs[agent].load_models(model_path)
+
         runner.t_env = timestep_to_load
 
         if args.evaluate or args.save_replay:
             evaluate_sequential(args, runner)
             return
-
-    # start training
-    episode = 0
-    last_test_T = -args.test_interval - 1
-    last_log_T = 0
-    model_save_time = 0
-
-    start_time = time.time()
-    last_time = start_time
-
-    logger.console_logger.info("Beginning training for {} timesteps".format(args.t_max))
-
-    while runner.t_env <= args.t_max:
-
-        # Run for a whole episode at a time
-        episode_batch = runner.run(test_mode=False)
-        buffer.insert_episode_batch(episode_batch)
-
-        if buffer.can_sample(args.batch_size):
-            episode_sample = buffer.sample(args.batch_size)
-
-            # Truncate batch to only filled timesteps
-            max_ep_t = episode_sample.max_t_filled()
-            episode_sample = episode_sample[:, :max_ep_t]
-
-            if episode_sample.device != args.device:
-                episode_sample.to(args.device)
-
-            learner.train(episode_sample, runner.t_env, episode)
-
-        # Execute test runs once in a while
-        n_test_runs = max(1, args.test_nepisode // runner.batch_size)
-        if (runner.t_env - last_test_T) / args.test_interval >= 1.0:
-
-            logger.console_logger.info("t_env: {} / {}".format(runner.t_env, args.t_max))
-            logger.console_logger.info("Estimated time left: {}. Time passed: {}".format(
-                time_left(last_time, last_test_T, runner.t_env, args.t_max), time_str(time.time() - start_time)))
-            last_time = time.time()
-
-            last_test_T = runner.t_env
-            for _ in range(n_test_runs):
-                runner.run(test_mode=True)
-
-        if args.save_model and (runner.t_env - model_save_time >= args.save_model_interval or model_save_time == 0):
-            model_save_time = runner.t_env
-            save_path = os.path.join(args.local_results_path, "models", args.unique_token, str(runner.t_env))
-            #"results/models/{}".format(unique_token)
-            os.makedirs(save_path, exist_ok=True)
-            logger.console_logger.info("Saving models to {}".format(save_path))
-
-            # learner should handle saving/loading -- delegate actor save/load to mac,
-            # use appropriate filenames to do critics, optimizer states
-            learner.save_models(save_path)
-
-        episode += args.batch_size_run
-
-        if (runner.t_env - last_log_T) >= args.log_interval:
-            logger.log_stat("episode", episode, runner.t_env)
-            logger.print_recent_stats()
-            last_log_T = runner.t_env
-
-    runner.close_env()
-    logger.console_logger.info("Finished Training")
-
 
 def args_sanity_check(config, _log):
     # set CUDA flags
